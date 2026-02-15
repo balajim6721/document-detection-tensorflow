@@ -40,7 +40,7 @@ function App() {
   return (
     <div className="app-container">
       <header>
-        <h1>Self-KYC Verifier</h1>
+        <h1>Document Detector Tensorflow</h1>
         <p>{capturedImage ? "Review Capture" : "Align your document within the frame"}</p>
       </header>
 

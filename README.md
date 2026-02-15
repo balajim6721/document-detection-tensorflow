@@ -1,6 +1,6 @@
 # Self-KYC Verifier
 
-A React-based web application for automated document capture and verification. This tool leverages TensorFlow.js for real-time object detection and Tesseract.js for Optical Character Recognition (OCR), providing a seamless "Self-KYC" experience.
+A React-based web application for automated document capture and verification. This tool leverages TensorFlow.js for real-time object detection and Tesseract.js for Optical Character Recognition (OCR), providing a seamless "Self-KYC"== experience.
 
 ## 🚀 Key Features
 

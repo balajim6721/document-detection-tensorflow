@@ -12,6 +12,7 @@ const DocumentDetector = ({ videoElement, onCapture }) => {
     const [model, setModel] = useState(null);
     const [status, setStatus] = useState("Loading model...");
     const [stabilityCounter, setStabilityCounter] = useState(0);
+    const [isDetected, setIsDetected] = useState(false);
 
     // Load model
     useEffect(() => {
@@ -31,6 +32,7 @@ const DocumentDetector = ({ videoElement, onCapture }) => {
     // Detection loop
     useEffect(() => {
         let animationId;
+        let mounted = true;
 
         const detectFrame = async () => {
             if (!model || !videoElement || !canvasRef.current) return;
@@ -58,17 +60,8 @@ const DocumentDetector = ({ videoElement, onCapture }) => {
             let documentDetected = false;
 
             predictions.forEach(prediction => {
-                // Filter for document-like objects (using proxies for now as COCO-SSD doesn't have "ID Card")
-                // "book", "cell phone", "laptop" are common proxies. 
-                // We will accept any object with reasonable confidence for this demo, 
-                // but normally would filter by class.
                 const isDocumentLike = ['book', 'cell phone', 'laptop', 'handbag', 'suitcase'].includes(prediction.class);
 
-                // Prominent Object Heuristic:
-                // If an object is not in the "document-like" list, check if it's prominent enough to be a document.
-                // 1. reasonable confidence (> 0.5)
-                // 2. large enough area (> 15% of frame)
-                // 3. centered in the frame
                 const [x, y, width, height] = prediction.bbox;
                 const area = width * height;
                 const frameArea = displaySize.width * displaySize.height;
@@ -81,26 +74,25 @@ const DocumentDetector = ({ videoElement, onCapture }) => {
                     centerY > (displaySize.height * 0.25) &&
                     centerY < (displaySize.height * 0.75);
 
-                const isPerson = prediction.class === 'person' || prediction.class === 'person'; // Just in case, sometimes labels are weird
-                // Prominent Object Heuristic:
-                // ... (requires not person)
+                const isPerson = prediction.class === 'person';
                 const isProminent = !isPerson && prediction.score > 0.5 && isLarge && isCentered;
 
                 if ((isDocumentLike && prediction.score > 0.6) || isProminent) {
                     documentDetected = true;
                     lastDetectionRef.current = prediction.bbox;
 
-                    // Draw bounding box
-                    ctx.strokeStyle = isDocumentLike ? "#00FF00" : "#FFFF00"; // Green for known classes, Yellow for heuristic
-                    ctx.lineWidth = 2;
+                    // Draw bounding box (Subtle guide)
+                    ctx.strokeStyle = "rgba(99, 102, 241, 0.5)"; // Indigo with opacity
+                    ctx.lineWidth = 4;
+                    ctx.setLineDash([10, 5]);
                     ctx.strokeRect(x, y, width, height);
-
-                    ctx.font = "18px Arial";
-                    ctx.fillStyle = isDocumentLike ? "#00FF00" : "#FFFF00";
-                    const label = isDocumentLike ? prediction.class : "Document?";
-                    ctx.fillText(`${label} (${Math.round(prediction.score * 100)}%)`, x, y > 10 ? y - 5 : 10);
+                    ctx.setLineDash([]);
                 }
             });
+
+            if (mounted) {
+                setIsDetected(documentDetected);
+            }
 
             if (documentDetected) {
                 // Calculate current center
@@ -126,25 +118,16 @@ const DocumentDetector = ({ videoElement, onCapture }) => {
                     if (newCount >= STABILITY_THRESHOLD) {
                         // Trigger capture
                         const captureCanvas = document.createElement('canvas');
+                        const [x, y, w, h] = lastDetectionRef.current;
+                        const padding = 20;
+                        const sx = Math.max(0, x - padding);
+                        const sy = Math.max(0, y - padding);
+                        const sw = Math.min(videoElement.videoWidth - sx, w + (padding * 2));
+                        const sh = Math.min(videoElement.videoHeight - sy, h + (padding * 2));
 
-                        if (lastDetectionRef.current) {
-                            // Capture cropped image with padding
-                            const [x, y, w, h] = lastDetectionRef.current;
-                            const padding = 20;
-                            const sx = Math.max(0, x - padding);
-                            const sy = Math.max(0, y - padding);
-                            const sw = Math.min(videoElement.videoWidth - sx, w + (padding * 2));
-                            const sh = Math.min(videoElement.videoHeight - sy, h + (padding * 2));
-
-                            captureCanvas.width = sw;
-                            captureCanvas.height = sh;
-                            captureCanvas.getContext('2d').drawImage(videoElement, sx, sy, sw, sh, 0, 0, sw, sh);
-                        } else {
-                            // Fallback to full frame
-                            captureCanvas.width = videoElement.videoWidth;
-                            captureCanvas.height = videoElement.videoHeight;
-                            captureCanvas.getContext('2d').drawImage(videoElement, 0, 0);
-                        }
+                        captureCanvas.width = sw;
+                        captureCanvas.height = sh;
+                        captureCanvas.getContext('2d').drawImage(videoElement, sx, sy, sw, sh, 0, 0, sw, sh);
 
                         const imageData = captureCanvas.toDataURL('image/jpeg');
                         onCapture(imageData);
@@ -166,32 +149,34 @@ const DocumentDetector = ({ videoElement, onCapture }) => {
         }
 
         return () => {
+            mounted = false;
             if (animationId) cancelAnimationFrame(animationId);
         };
     }, [model, videoElement, onCapture]);
 
+    // Update status text based on state
     useEffect(() => {
         if (stabilityCounter > 0) {
-            setStatus(`Hold steady... ${Math.round((stabilityCounter / STABILITY_THRESHOLD) * 100)}%`);
+            const progress = Math.round((stabilityCounter / STABILITY_THRESHOLD) * 100);
+            setStatus(`Hold steady... ${progress}%`);
+        } else if (isDetected) {
+            setStatus("Hold steady to capture");
         } else if (model) {
-            setStatus("Align document to capture");
+            setStatus("Align document within frame");
         }
-    }, [stabilityCounter, model]);
+    }, [stabilityCounter, isDetected, model]);
 
     return (
         <>
             <canvas ref={canvasRef} className="detection-canvas" />
-            <div style={{
-                position: 'absolute',
-                bottom: '20px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: 'rgba(0,0,0,0.7)',
-                color: 'white',
-                padding: '10px 20px',
-                borderRadius: '20px',
-                zIndex: 10
-            }}>
+
+            {/* Static Guide Overlay */}
+            <div className={`document-overlay ${isDetected ? 'active' : ''} ${stabilityCounter > 0 ? 'scanning' : ''}`}>
+                <div className="scan-line"></div>
+            </div>
+
+            {/* Status Badge */}
+            <div className="status-badge">
                 {status}
             </div>
         </>
