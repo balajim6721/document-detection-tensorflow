@@ -41,18 +41,18 @@ function App() {
 
   /* ---------- SWITCH CAMERA ---------- */
   const switchCamera = useCallback(() => {
-    if (devices.length > 1 && currentDeviceId) {
-      // Cycle by deviceId — more reliable on Android (multiple back cameras)
-      const currentIndex = devices.findIndex(
-        (d) => d.deviceId === currentDeviceId,
-      );
-      const nextIndex = (currentIndex + 1) % devices.length;
-      setCurrentDeviceId(devices[nextIndex].deviceId);
-    } else {
+    // if (devices.length > 1 && currentDeviceId) {
+    //   // Cycle by deviceId — more reliable on Android (multiple back cameras)
+    //   const currentIndex = devices.findIndex(
+    //     (d) => d.deviceId === currentDeviceId,
+    //   );
+    //   const nextIndex = (currentIndex + 1) % devices.length;
+    //   setCurrentDeviceId(devices[nextIndex].deviceId);
+    // } else {
       // Toggle facingMode — reliable on iOS
       setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
       setCurrentDeviceId(null);
-    }
+    // }
   }, [devices, currentDeviceId]);
 
   const handleCapture = async (imageData) => {
